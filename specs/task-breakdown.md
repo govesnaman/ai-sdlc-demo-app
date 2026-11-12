@@ -99,10 +99,10 @@ Add a Playwright end-to-end scenario that exercises a rejected over-limit approv
 - Playwright tests and page objects: `e2e/tests/` and `e2e/pages/`; runner: `e2e/playwright.config.ts`.
 - E2E command from the repository root: `cd e2e && npm test`.
 - Unit baseline: `dotnet test backend/InvoiceApp.sln`.
-- C# mutation testing uses the Stryker.NET global tool (version 4.16.0); the root npm Stryker/Vitest runner does not mutate C# code. Install the .NET runner if needed, then run from the repository root:
-  - `dotnet tool install --global dotnet-stryker --version 4.16.0`
-  - `cd backend/tests/InvoiceApp.Tests && dotnet-stryker --project InvoiceApp.Domain.csproj --test-project InvoiceApp.Tests.csproj --mutate '**/ApprovalService.cs' --concurrency 2 --reporter ClearTextTree --reporter Json --output /tmp/stryker-step3-verified`
-- The latest Stryker.NET run scored 92.63%. In `ApprovalService.cs`, 88 mutants were killed and two survived; both survivors were reviewed as equivalent: the `"Director"`-to-empty mutation still selects the Director limit because only `"Manager"` selects the lower limit, and changing `>` to `>=` in the later high-value branch cannot affect the exact 500,000 boundary because the preceding pending-invoice branch already handles amounts `<= 500,000`.
+- C# mutation testing uses the Stryker.NET global tool; the root npm Stryker/Vitest runner does not mutate C# code. Install the pinned tool and run from the unit-test project directory:
+  - `dotnet tool install -g dotnet-stryker --version 4.13.0`
+  - `cd backend/tests/InvoiceApp.Tests && dotnet stryker --project InvoiceApp.Domain.csproj --test-project InvoiceApp.Tests.csproj --mutate '**/ApprovalService.cs' --concurrency 2 --reporter ClearTextTree --reporter Json --output /tmp/stryker-approval-service`
+- The recorded Step 3 run with Stryker.NET 4.16.0 targeted `ApprovalService.cs` and scored 92.63% (88 killed, 2 equivalent survivors, 5 no coverage, and 7 compile errors). A repeat run using the pinned 4.13.0 tool scored 92.71% (89 killed, 2 equivalent survivors, 5 no coverage, and 7 compile errors). The equivalent survivors were reviewed: replacing the `"Director"` tier value with an empty string still selects the Director limit because only `"Manager"` selects the lower limit; changing `>` to `>=` in the later high-value branch cannot affect the exact 500,000 boundary because the preceding pending-invoice branch handles amounts through 500,000.
 
 ### E2E and mutation targets
 
@@ -121,12 +121,12 @@ Add a Playwright end-to-end scenario that exercises a rejected over-limit approv
 - [x] `dotnet test backend/InvoiceApp.sln` passes.
 - [x] A compatible .NET mutation runner is used for C# mutation verification; root npm Stryker is not treated as evidence.
 - [x] Mutation report shows targeted approval-policy mutants killed; both surviving mutants are documented as behaviorally equivalent.
-- [ ] Commit 3 depends on Commits 1 and 2 and contains the E2E/UI verification and mutation-runner/test improvements only.
+- [x] Commit `0757be1` follows Commits `821188c` and `8c59318` and contains the Step 3 E2E/UI verification and mutation-test hardening; the preceding setup/spec commits are `0cf53e0` and `25f9e44`.
 
 ## Final Acceptance
 
-- [ ] All pre-implementation role/identity decisions are documented.
-- [ ] All three commits pass their respective step checklists in order.
-- [ ] The final implementation preserves the domain/API/UI layering in `AGENTS.md`.
-- [ ] Rejected approval attempts return useful errors and leave invoice state unchanged.
-- [ ] Unit and E2E commands, plus any configured C# mutation command, have their actual outcomes recorded without claiming unrun checks passed.
+- [x] Pre-implementation role and identity decisions are documented in the specification and `AGENTS.md`.
+- [x] The three feature commits (`821188c`, `8c59318`, `0757be1`) follow the sequential implementation plan after setup/spec commits `0cf53e0` and `25f9e44`.
+- [x] The final implementation preserves the domain/API/UI layering in `AGENTS.md`.
+- [x] Rejected approval attempts return useful errors and leave invoice state unchanged.
+- [x] `dotnet test backend/InvoiceApp.sln` passed (38 tests), `cd e2e && npm test` passed (1 test), and Stryker.NET results for `ApprovalService.cs` are recorded with their complete mutant-status breakdowns.
