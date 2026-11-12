@@ -245,3 +245,50 @@ This append-only Markdown log records AI-assisted task activity and commit prepa
 > Automatic session-end audit marker. Use the structured-logging skill for the task-specific record.
 - **Files:**
 - None
+
+## 2026-11-12T04:59:07.684Z
+
+- **Agent:** git-hook
+- **Step:** prepare-commit-msg
+- **Prompt:**
+> Automatic Git commit audit record.
+- **Summary:**
+> A commit was prepared; refer to Git commit metadata for its message.
+- **Files:**
+- `AGENTS.md`
+- `ai-interaction-log.md`
+- `backend/src/InvoiceApp.Domain/ApprovalRecord.cs`
+- `backend/src/InvoiceApp.Domain/ApprovalService.cs`
+- `backend/src/InvoiceApp.Domain/Invoice.cs`
+- `backend/src/InvoiceApp.Domain/InvoiceStatus.cs`
+- `backend/tests/InvoiceApp.Tests/ApprovalServiceTests.cs`
+- `specs/approval-limits-spec.md`
+- `specs/task-breakdown.md`
+
+## 2026-11-12T05:10:17.529Z
+
+- **Agent:** e2e-agent + qa-agent
+- **Step:** step-3-e2e-and-mutation-hardening
+- **Prompt:**
+> Add a Playwright rejection flow for over-limit Manager approval, inspect Stryker.NET survivors, strengthen targeted unit tests, and rerun verification.
+- **Summary:**
+> Added a Manager over-limit rejection E2E and page object; expanded ApprovalService tests to kill non-equivalent surviving mutants and document the two equivalent survivors. Backend tests (38/38), Playwright (1/1), and Stryker.NET (92.63%, 88 ApprovalService mutants killed) passed; generated Stryker workspace removed.
+- **Files:**
+- `ai-interaction-log.md`
+- `backend/src/InvoiceApp.Api/appsettings.json`
+- `backend/tests/InvoiceApp.Tests/ApprovalServiceTests.cs`
+- `e2e/playwright.config.ts`
+- `e2e/pages/invoice-approval-page.ts`
+- `e2e/tests/rejected-over-limit-approval.spec.ts`
+- `specs/task-breakdown.md`
+
+## 2026-11-12T05:10:33.906Z
+
+- **Agent:** copilot
+- **Step:** session-stop
+- **Prompt:**
+> Copilot session completed; see task-level entry for prompt summary.
+- **Summary:**
+> Automatic session-end audit marker. Use the structured-logging skill for the task-specific record.
+- **Files:**
+- None

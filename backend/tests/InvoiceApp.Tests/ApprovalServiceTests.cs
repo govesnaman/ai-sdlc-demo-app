@@ -44,7 +44,11 @@ public class ApprovalServiceTests
     {
         var (service, _) = ServiceFor(InvoiceWith("INV-1", InvoiceStatus.Approved));
 
-        Assert.Throws<InvalidOperationException>(() => service.Submit("INV-1"));
+        var exception = Assert.Throws<InvalidOperationException>(() => service.Submit("INV-1"));
+
+        Assert.Equal(
+            "Invoice INV-1 is Approved; only drafts can be submitted.",
+            exception.Message);
     }
 
     [Theory]
@@ -243,6 +247,126 @@ public class ApprovalServiceTests
         Assert.Equal(1, repository.UpdateCount);
     }
 
+    [Fact]
+    public void Approve_DuplicateApproverOnInvalidBoundaryState_RejectsWithoutChangingInvoice()
+    {
+        var invoice = InvoiceWith("INV-1", InvoiceStatus.PartiallyApproved, 500_000m);
+        invoice.Approvals.Add(new ApprovalRecord
+        {
+            UserId = "director-a",
+            Role = "Director",
+            ApprovedAt = OriginalDecidedAt
+        });
+        var originalState = Capture(invoice);
+        var (service, repository) = ServiceFor(invoice);
+
+        var exception = Assert.Throws<ApprovalRejectedException>(
+            () => service.Approve("INV-1", "director-a", "Director"));
+
+        Assert.Equal("INVALID_APPROVAL_STATE", exception.ErrorCode);
+        Assert.Equal(
+            "INVALID_APPROVAL_STATE: Invoice INV-1 has an inconsistent status or approval history.",
+            exception.Message);
+        Assert.Equal(originalState, Capture(invoice));
+        Assert.Equal(0, repository.UpdateCount);
+    }
+
+    [Fact]
+    public void Approve_PartiallyApprovedInvoiceAtDirectorBoundary_RejectsWithoutChangingInvoice()
+    {
+        var invoice = InvoiceWith("INV-1", InvoiceStatus.PartiallyApproved, 500_000m);
+        invoice.Approvals.Add(new ApprovalRecord
+        {
+            UserId = "director-a",
+            Role = "Director",
+            ApprovedAt = OriginalDecidedAt
+        });
+        var originalState = Capture(invoice);
+        var (service, repository) = ServiceFor(invoice);
+
+        var exception = Assert.Throws<ApprovalRejectedException>(
+            () => service.Approve("INV-1", "director-b", "Director"));
+
+        Assert.Equal("INVALID_APPROVAL_STATE", exception.ErrorCode);
+        Assert.Equal(originalState, Capture(invoice));
+        Assert.Equal(0, repository.UpdateCount);
+    }
+
+    [Fact]
+    public void Approve_DuplicateApproverIsDetectedBeforeInvalidApprovalHistory()
+    {
+        var invoice = InvoiceWith("INV-1", InvoiceStatus.PartiallyApproved, 600_000m);
+        invoice.Approvals.AddRange(
+        [
+            new ApprovalRecord
+            {
+                UserId = "director-a",
+                Role = "Director",
+                ApprovedAt = OriginalDecidedAt
+            },
+            new ApprovalRecord
+            {
+                UserId = "director-b",
+                Role = "Director",
+                ApprovedAt = OriginalDecidedAt
+            }
+        ]);
+        var originalState = Capture(invoice);
+        var (service, repository) = ServiceFor(invoice);
+
+        var exception = Assert.Throws<ApprovalRejectedException>(
+            () => service.Approve("INV-1", "director-a", "Director"));
+
+        Assert.Equal("DUPLICATE_APPROVER", exception.ErrorCode);
+        Assert.Equal(originalState, Capture(invoice));
+        Assert.Equal(0, repository.UpdateCount);
+    }
+
+    [Fact]
+    public void Approve_PartiallyApprovedInvoiceWithExtraHistory_RejectsWithoutChangingInvoice()
+    {
+        var invoice = InvoiceWith("INV-1", InvoiceStatus.PartiallyApproved, 600_000m);
+        invoice.Approvals.AddRange(
+        [
+            new ApprovalRecord
+            {
+                UserId = "manager-a",
+                Role = "Manager",
+                ApprovedAt = OriginalDecidedAt
+            },
+            new ApprovalRecord
+            {
+                UserId = "director-b",
+                Role = "Director",
+                ApprovedAt = OriginalDecidedAt
+            }
+        ]);
+        var originalState = Capture(invoice);
+        var (service, repository) = ServiceFor(invoice);
+
+        var exception = Assert.Throws<ApprovalRejectedException>(
+            () => service.Approve("INV-1", "director-c", "Director"));
+
+        Assert.Equal("INVALID_APPROVAL_STATE", exception.ErrorCode);
+        Assert.Equal(originalState, Capture(invoice));
+        Assert.Equal(0, repository.UpdateCount);
+    }
+
+    [Fact]
+    public void Approve_NonPendingHighValueInvoice_RejectsWithoutChangingInvoice()
+    {
+        var invoice = InvoiceWith("INV-1", InvoiceStatus.Rejected, 600_000m);
+        var originalState = Capture(invoice);
+        var (service, repository) = ServiceFor(invoice);
+
+        var exception = Assert.Throws<ApprovalRejectedException>(
+            () => service.Approve("INV-1", "director-a", "Director"));
+
+        Assert.Equal("INVALID_INVOICE_STATUS", exception.ErrorCode);
+        Assert.Equal(originalState, Capture(invoice));
+        Assert.Equal(0, repository.UpdateCount);
+    }
+
     [Theory]
     [InlineData("Admin")]
     [InlineData("Auditor")]
@@ -321,6 +445,9 @@ public class ApprovalServiceTests
             () => service.Approve("INV-1", "manager-1", "Manager"));
 
         Assert.Equal("INVALID_INVOICE_STATUS", exception.ErrorCode);
+        Assert.Equal(
+            "INVALID_INVOICE_STATUS: Invoice INV-1 is Draft; only pending or partially approved invoices can be approved.",
+            exception.Message);
         Assert.Equal(originalState, Capture(invoice));
         Assert.Equal(0, repository.UpdateCount);
     }
@@ -330,18 +457,22 @@ public class ApprovalServiceTests
     {
         var (service, _) = ServiceFor();
 
-        Assert.Throws<KeyNotFoundException>(() => service.Approve("INV-404", "manager-1", "Manager"));
+        var exception = Assert.Throws<KeyNotFoundException>(
+            () => service.Approve("INV-404", "manager-1", "Manager"));
+
+        Assert.Equal("Invoice INV-404 was not found.", exception.Message);
     }
 
     [Fact]
     public void Reject_RecordsReasonAndApprover()
     {
-        var (service, _) = ServiceFor(InvoiceWith("INV-1", InvoiceStatus.PendingApproval));
+        var (service, repository) = ServiceFor(InvoiceWith("INV-1", InvoiceStatus.PendingApproval));
 
         var result = service.Reject("INV-1", "demo.approver", "Duplicate invoice");
 
         Assert.Equal(InvoiceStatus.Rejected, result.Status);
         Assert.Equal("Duplicate invoice", result.DecisionNote);
+        Assert.Equal(1, repository.UpdateCount);
     }
 
     [Fact]
@@ -364,7 +495,30 @@ public class ApprovalServiceTests
     {
         var (service, _) = ServiceFor(InvoiceWith("INV-1", InvoiceStatus.PendingApproval));
 
-        Assert.Throws<ArgumentException>(() => service.Reject("INV-1", "demo.approver", "  "));
+        var exception = Assert.Throws<ArgumentException>(
+            () => service.Reject("INV-1", "demo.approver", "  "));
+
+        Assert.Equal("A reason is required to reject an invoice. (Parameter 'reason')", exception.Message);
+    }
+
+    [Fact]
+    public void Reject_AlreadyRejectedInvoice_RejectsWithoutChangingInvoice()
+    {
+        var invoice = InvoiceWith("INV-1", InvoiceStatus.Rejected);
+        invoice.DecidedBy = "previous-approver";
+        invoice.DecidedAt = OriginalDecidedAt;
+        invoice.DecisionNote = "previous reason";
+        var originalState = Capture(invoice);
+        var (service, repository) = ServiceFor(invoice);
+
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => service.Reject("INV-1", "another-approver", "new reason"));
+
+        Assert.Equal(
+            "Invoice INV-1 is Rejected; only pending or partially approved invoices can be decided.",
+            exception.Message);
+        Assert.Equal(originalState, Capture(invoice));
+        Assert.Equal(0, repository.UpdateCount);
     }
 
     private static void AssertApprovalSucceeds(decimal amount, string role, string approver)

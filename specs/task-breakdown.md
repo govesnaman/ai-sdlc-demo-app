@@ -99,7 +99,10 @@ Add a Playwright end-to-end scenario that exercises a rejected over-limit approv
 - Playwright tests and page objects: `e2e/tests/` and `e2e/pages/`; runner: `e2e/playwright.config.ts`.
 - E2E command from the repository root: `cd e2e && npm test`.
 - Unit baseline: `dotnet test backend/InvoiceApp.sln`.
-- Stryker CLI is not currently configured for the C# domain: the repository has no Stryker configuration or .NET runner. Root npm dependencies include Stryker Core and its Vitest runner, which do not mutate C# code. Before claiming C# mutation verification, configure a compatible Stryker.NET runner/toolchain and its target/test command, then document and run its exact command. `npx stryker run` alone is not evidence that the C# policy was mutated.
+- C# mutation testing uses the Stryker.NET global tool (version 4.16.0); the root npm Stryker/Vitest runner does not mutate C# code. Install the .NET runner if needed, then run from the repository root:
+  - `dotnet tool install --global dotnet-stryker --version 4.16.0`
+  - `cd backend/tests/InvoiceApp.Tests && dotnet-stryker --project InvoiceApp.Domain.csproj --test-project InvoiceApp.Tests.csproj --mutate '**/ApprovalService.cs' --concurrency 2 --reporter ClearTextTree --reporter Json --output /tmp/stryker-step3-verified`
+- The latest Stryker.NET run scored 92.63%. In `ApprovalService.cs`, 88 mutants were killed and two survived; both survivors were reviewed as equivalent: the `"Director"`-to-empty mutation still selects the Director limit because only `"Manager"` selects the lower limit, and changing `>` to `>=` in the later high-value branch cannot affect the exact 500,000 boundary because the preceding pending-invoice branch already handles amounts `<= 500,000`.
 
 ### E2E and mutation targets
 
@@ -112,12 +115,12 @@ Add a Playwright end-to-end scenario that exercises a rejected over-limit approv
 
 ### Verification checklist
 
-- [ ] E2E scenario uses the configured local server and existing Playwright setup, with no external service dependency.
-- [ ] E2E observes the rejection alert and unchanged invoice status/actionability.
-- [ ] `cd e2e && npm test` passes.
-- [ ] `dotnet test backend/InvoiceApp.sln` passes.
-- [ ] A compatible .NET mutation runner is configured before C# mutation results are claimed.
-- [ ] Mutation report shows the targeted approval-policy mutants killed; surviving relevant mutants lead to stronger tests or a documented reason.
+- [x] E2E scenario uses the configured local server and existing Playwright setup, with no external service dependency.
+- [x] E2E observes the rejection alert and unchanged invoice status/actionability.
+- [x] `cd e2e && npm test` passes.
+- [x] `dotnet test backend/InvoiceApp.sln` passes.
+- [x] A compatible .NET mutation runner is used for C# mutation verification; root npm Stryker is not treated as evidence.
+- [x] Mutation report shows targeted approval-policy mutants killed; both surviving mutants are documented as behaviorally equivalent.
 - [ ] Commit 3 depends on Commits 1 and 2 and contains the E2E/UI verification and mutation-runner/test improvements only.
 
 ## Final Acceptance
