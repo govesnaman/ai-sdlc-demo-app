@@ -1,0 +1,124 @@
+# Invoice Approval Limits: Sequential Task Breakdown
+
+## Status and Scope
+
+- **Document type:** implementation plan (OpenSpec / Spec Kit-style tasks and acceptance checklist)
+- **Status:** proposed; no application or test code is changed by this document
+- **Specification:** [approval-limits-spec.md](./approval-limits-spec.md)
+- **Required project guidance:** `AGENTS.md`
+- **Commit plan:** three strictly sequential commits; do not start a later step until its predecessor's checklist passes and its commit is recorded.
+
+## Pre-Implementation Gate
+
+Before Step 2, the policy owner must decide:
+
+- Which role can create the first approval for an invoice above 500,000, given the Manager 50,000 and Director 500,000 ceilings.
+- Whether `Admin` has approval override authority, maps to Director, or is not an approver for these rules.
+- Whether configured username is the stable `UserId` or users/sessions need a separate `UserId`.
+
+Record those decisions in the feature specification before implementing code; do not infer them from current `Approver`/`Admin` authorization. Step 1 may implement and test the unambiguous single-approver thresholds while over-500,000 invoices remain rejected as requiring the forthcoming dual-approval workflow.
+
+## Step 1 (Commit 1): Single-Approver Limits
+
+### Scope
+
+Implement Manager approval for invoices `<= 50,000` and Director approval for invoices `<= 500,000`. An amount above the acting role's single-approver ceiling must be refused with a descriptive error. Do not implement `PartiallyApproved` or count multiple approvals in this commit.
+
+### Paths
+
+- Domain model and policy: `backend/src/InvoiceApp.Domain/Invoice.cs`, `backend/src/InvoiceApp.Domain/InvoiceStatus.cs` (only if needed), `backend/src/InvoiceApp.Domain/ApprovalService.cs`.
+- Identity/role propagation as required to enforce the policy: `backend/src/InvoiceApp.Api/Auth/UserSession.cs`, `backend/src/InvoiceApp.Api/Controllers/AuthController.cs`, `backend/src/InvoiceApp.Api/Controllers/ApprovalsController.cs`, and role/user configuration in `backend/src/InvoiceApp.Api/appsettings.json`.
+- Unit tests: `backend/tests/InvoiceApp.Tests/ApprovalServiceTests.cs`; use `backend/tests/InvoiceApp.Tests/FakeInvoiceRepository.cs`.
+
+### Required tests
+
+Test exact amounts **49,999**, **50,000**, **50,001**, **499,999**, **500,000**, and **500,001** against Manager and Director decisions as applicable. Include successful inclusive-boundary assertions and failures immediately above each applicable limit. Verify invoices above 500,000 are not approved by a single approver in this step.
+
+For every failed approval, assert the descriptive failure and exact before/after equality for all Invoice fields and approval history. Assert that the repository is not updated on the failed attempt. Include pre-populated decision metadata and timestamps in at least one failure case so accidental overwrites are detected.
+
+### Verification checklist
+
+- [ ] Manager succeeds at 49,999 and 50,000.
+- [ ] Manager is rejected at 50,001 without any invoice mutation.
+- [ ] Director succeeds at 49,999, 50,000, 50,001, 499,999, and 500,000.
+- [ ] Director cannot single-approve 500,001.
+- [ ] Errors are clear and map to the specified API response contract.
+- [ ] Failed attempts leave `Status`, `Approvals` (if introduced), `CreatedAt`, `DecidedBy`, `DecidedAt`, and `DecisionNote` unchanged and do not persist.
+- [ ] `dotnet test backend/InvoiceApp.sln` passes.
+- [ ] Commit 1 contains only Step 1 production changes and their direct unit tests/documentation needed for those changes.
+
+## Step 2 (Commit 2): Two-Approver Workflow
+
+### Scope
+
+Implement the `> 500,000` path using `InvoiceStatus.PartiallyApproved`, an ordered approval history, two distinct stable `UserId` values, and the required Director role for the second approval. No invoice above 500,000 can reach `Approved` after only one successful approval. Resolve the pre-implementation policy gate before coding the first-approver role and Admin behavior.
+
+### Paths
+
+- Domain entity and approval history: add `backend/src/InvoiceApp.Domain/ApprovalRecord.cs`; update `backend/src/InvoiceApp.Domain/Invoice.cs` and `backend/src/InvoiceApp.Domain/InvoiceStatus.cs`.
+- Domain transitions and atomic validation: `backend/src/InvoiceApp.Domain/ApprovalService.cs`.
+- Identity, roles, routes, and error mapping: `backend/src/InvoiceApp.Api/Auth/UserSession.cs`, `backend/src/InvoiceApp.Api/Auth/RequireRoleAttribute.cs`, `backend/src/InvoiceApp.Api/Controllers/ApprovalsController.cs`, `backend/src/InvoiceApp.Api/Controllers/ApiControllerBase.cs`, and configured users in `backend/src/InvoiceApp.Api/appsettings.json`.
+- Tests: `backend/tests/InvoiceApp.Tests/ApprovalServiceTests.cs` and `backend/tests/InvoiceApp.Tests/FakeInvoiceRepository.cs`.
+
+### Required negative and transition tests
+
+- First valid approval produces `PartiallyApproved` with exactly one `ApprovalRecord` and leaves final-decision metadata unchanged.
+- A distinct Director second approval produces `Approved`, appends exactly one record, and sets final decision metadata according to the specification.
+- Reusing the first approver's `UserId` returns `DUPLICATE_APPROVER` even when the name/session differs; no mutation or repository update occurs.
+- A non-Director second approver returns `DIRECTOR_REQUIRED`; no mutation or repository update occurs.
+- The first approval cannot skip directly to `Approved`.
+- A second approval cannot be recorded when the invoice is already final or when the approval history is inconsistent.
+- All rejection cases compare the full before/after state, including collection contents and ordering, all timestamps, `DecidedBy`, `DecidedAt`, and `DecisionNote`.
+- Explicit invoice rejection continues to require a reason and does not erase prior approval history.
+
+### Verification checklist
+
+- [ ] The policy questions are recorded and implementation behavior matches those decisions.
+- [ ] `PartiallyApproved` is used only while exactly one qualifying approval is recorded for the dual-approval tier.
+- [ ] No `UserId` is counted twice; identity comparison uses the stable identifier, not display name.
+- [ ] The second approver above 500,000 is a Director.
+- [ ] Each failed approval returns the specified error and performs zero invoice/repository mutations.
+- [ ] API status, `errorCode`, and `error` values match the contract.
+- [ ] `dotnet test backend/InvoiceApp.sln` passes, including all six threshold amounts and negative invariants.
+- [ ] Commit 2 depends on Commit 1 and includes only the dual-approval domain/API behavior and its direct unit tests.
+
+## Step 3 (Commit 3): UI E2E and Mutation Verification
+
+### Scope
+
+Add a Playwright end-to-end scenario that exercises a rejected over-limit approval through the actual UI and confirms the invoice remains in its original status and approval state as visible to the user. Run mutation testing against the approval policy and add/fix tests to kill relevant mutants.
+
+### Paths and commands
+
+- UI behavior: `backend/src/InvoiceApp.Api/wwwroot/app.js`, `backend/src/InvoiceApp.Api/wwwroot/index.html`, and `backend/src/InvoiceApp.Api/wwwroot/styles.css` only if a UI change is needed.
+- Playwright tests and page objects: `e2e/tests/` and `e2e/pages/`; runner: `e2e/playwright.config.ts`.
+- E2E command from the repository root: `cd e2e && npm test`.
+- Unit baseline: `dotnet test backend/InvoiceApp.sln`.
+- Stryker CLI is not currently configured for the C# domain: the repository has no Stryker configuration or .NET runner. Root npm dependencies include Stryker Core and its Vitest runner, which do not mutate C# code. Before claiming C# mutation verification, configure a compatible Stryker.NET runner/toolchain and its target/test command, then document and run its exact command. `npx stryker run` alone is not evidence that the C# policy was mutated.
+
+### E2E and mutation targets
+
+- Exercise a Manager (or other role chosen by the policy decision) attempting an approval beyond that role's approved limit, using the existing authenticated app flow.
+- Assert the visible alert presents a clear rejection message.
+- Assert the invoice remains at its prior status in the invoice table and remains actionable in the pending approval UI when applicable.
+- Verify no success-state transition or optimistic client-side status change occurs.
+- Target mutation cases for threshold comparator direction/inclusivity, removal of role validation, duplicate-`UserId` checking, second-approver Director checking, and state mutation/repository update before validation.
+- Preserve required user-facing and keyboard/accessibility behavior; use Playwright role/label locators, not CSS or XPath selectors.
+
+### Verification checklist
+
+- [ ] E2E scenario uses the configured local server and existing Playwright setup, with no external service dependency.
+- [ ] E2E observes the rejection alert and unchanged invoice status/actionability.
+- [ ] `cd e2e && npm test` passes.
+- [ ] `dotnet test backend/InvoiceApp.sln` passes.
+- [ ] A compatible .NET mutation runner is configured before C# mutation results are claimed.
+- [ ] Mutation report shows the targeted approval-policy mutants killed; surviving relevant mutants lead to stronger tests or a documented reason.
+- [ ] Commit 3 depends on Commits 1 and 2 and contains the E2E/UI verification and mutation-runner/test improvements only.
+
+## Final Acceptance
+
+- [ ] All pre-implementation role/identity decisions are documented.
+- [ ] All three commits pass their respective step checklists in order.
+- [ ] The final implementation preserves the domain/API/UI layering in `AGENTS.md`.
+- [ ] Rejected approval attempts return useful errors and leave invoice state unchanged.
+- [ ] Unit and E2E commands, plus any configured C# mutation command, have their actual outcomes recorded without claiming unrun checks passed.
