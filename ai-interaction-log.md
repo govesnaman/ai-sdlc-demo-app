@@ -4,14 +4,14 @@ This append-only Markdown log records AI-assisted task activity and commit prepa
 
 ## Phase Summary
 
-| Phase | Purpose |
-|---|---|
-| Specification | Record requirement analysis, acceptance criteria, and task breakdowns. |
-| Implementation | Record domain, API, or UI changes and their outcomes. |
-| Unit QA | Record unit-test coverage, execution, and mutation-testing status. |
-| E2E QA | Record Playwright scenarios and execution results. |
-| Review | Record diff-review findings and their disposition. |
-| Setup / Tooling | Record workflow, agent, hook, and audit-log configuration. |
+| Phase           | Purpose                                                                |
+| --------------- | ---------------------------------------------------------------------- |
+| Specification   | Record requirement analysis, acceptance criteria, and task breakdowns. |
+| Implementation  | Record domain, API, or UI changes and their outcomes.                  |
+| Unit QA         | Record unit-test coverage, execution, and mutation-testing status.     |
+| E2E QA          | Record Playwright scenarios and execution results.                     |
+| Review          | Record diff-review findings and their disposition.                     |
+| Setup / Tooling | Record workflow, agent, hook, and audit-log configuration.             |
 
 ## Entries
 
@@ -20,9 +20,9 @@ This append-only Markdown log records AI-assisted task activity and commit prepa
 - **Agent:** copilot
 - **Step:** setup-tooling
 - **Prompt:**
-> Create repository custom agents, structured logging, and commit audit support.
+  > Create repository custom agents, structured logging, and commit audit support.
 - **Summary:**
-> Added five focused Copilot agents, a structured logging skill and CLI, Copilot session-stop logging, and a Git prepare-commit hook.
+  > Added five focused Copilot agents, a structured logging skill and CLI, Copilot session-stop logging, and a Git prepare-commit hook.
 - **Files:**
 - `.github/agents/spec-agent.agent.md`
 - `.github/agents/coder-agent.agent.md`
@@ -40,9 +40,9 @@ This append-only Markdown log records AI-assisted task activity and commit prepa
 - **Agent:** copilot
 - **Step:** validation
 - **Prompt:**
-> Validate the new repository agent, logging, and commit-hook setup.
+  > Validate the new repository agent, logging, and commit-hook setup.
 - **Summary:**
-> Node and shell syntax checks, Copilot hook JSON parsing, executable-bit checks, core.hooksPath configuration, and invalid-argument rejection all passed. No application test suite was run because this change is repository tooling and instructions.
+  > Node and shell syntax checks, Copilot hook JSON parsing, executable-bit checks, core.hooksPath configuration, and invalid-argument rejection all passed. No application test suite was run because this change is repository tooling and instructions.
 - **Files:**
 - `.github/skills/structured-logging/SKILL.md`
 - `.githooks/prepare-commit-msg`
@@ -60,9 +60,9 @@ This append-only Markdown log records AI-assisted task activity and commit prepa
 - **Agent:** SetupAgent
 - **Step:** Context & Hooks
 - **Prompt:**
-> Initialize sub-agents and logging
+  > Initialize sub-agents and logging
 - **Summary:**
-> Created .github/agents/, logging script, skill, and ai-interaction-log.md
+  > Created .github/agents/, logging script, skill, and ai-interaction-log.md
 - **Files:**
 - `AGENTS.md, .github/agents/, scripts/log-ai-interaction.js`
 
@@ -71,9 +71,9 @@ This append-only Markdown log records AI-assisted task activity and commit prepa
 - **Agent:** SetupAgent
 - **Step:** Context & Hooks
 - **Prompt:**
-> Initialize sub-agents and logging
+  > Initialize sub-agents and logging
 - **Summary:**
-> Created .github/agents/, logging script, skill, and ai-interaction-log.md
+  > Created .github/agents/, logging script, skill, and ai-interaction-log.md
 - **Files:**
 - `AGENTS.md, .github/agents/, scripts/log-ai-interaction.js`
 
@@ -82,9 +82,9 @@ This append-only Markdown log records AI-assisted task activity and commit prepa
 - **Agent:** git-hook
 - **Step:** prepare-commit-msg
 - **Prompt:**
-> Automatic Git commit audit record.
+  > Automatic Git commit audit record.
 - **Summary:**
-> A commit was prepared; refer to Git commit metadata for its message.
+  > A commit was prepared; refer to Git commit metadata for its message.
 - **Files:**
 - `.githooks/prepare-commit-msg`
 - `.github/agents/coder-agent.agent.md`
@@ -103,14 +103,85 @@ This append-only Markdown log records AI-assisted task activity and commit prepa
 - **Agent:** spec-agent
 - **Step:** specification
 - **Prompt:**
-> Inspect invoice approval models, role/session identity, service, endpoints, UI, and tests; create a spec and sequential task plan without modifying source code.
+  > Inspect invoice approval models, role/session identity, service, endpoints, UI, and tests; create a spec and sequential task plan without modifying source code.
 - **Summary:**
-> Documented current repository types and behavior, proposed invoice approval schema and error contract, exact threshold/state rules, atomic rejection invariants, unresolved policy decisions, and three sequential implementation commits with verification checklists. No application or test code was changed.
+  > Documented current repository types and behavior, proposed invoice approval schema and error contract, exact threshold/state rules, atomic rejection invariants, unresolved policy decisions, and three sequential implementation commits with verification checklists. No application or test code was changed.
 - **Files:**
 - `specs/approval-limits-spec.md`
 - `specs/task-breakdown.md`
 
 ## 2026-11-12T04:29:33.957Z
+
+- **Agent:** copilot
+- **Step:** session-stop
+- **Prompt:**
+  > Copilot session completed; see task-level entry for prompt summary.
+- **Summary:**
+  > Automatic session-end audit marker. Use the structured-logging skill for the task-specific record.
+- **Files:**
+- None
+
+## 2026-11-12T04:31:44.705Z
+
+- **Agent:** git-hook
+- **Step:** prepare-commit-msg
+- **Prompt:**
+  > Automatic Git commit audit record.
+- **Summary:**
+  > A commit was prepared; refer to Git commit metadata for its message.
+- **Files:**
+- `ai-interaction-log.md`
+- `specs/approval-limits-spec.md`
+- `specs/task-breakdown.md`
+
+## 2026-11-12T04:34:31.504Z
+
+## 2026-11-12T04:44:28.893Z
+
+- **Agent:** coder-agent + qa-agent
+- **Step:** step-1-single-approver-limits
+- **Prompt:**
+> Implement Step 1 role-limited approvals with exact boundaries and atomic rejection; record the resolved Approver/Admin role mapping.
+- **Summary:**
+> Implemented Manager and legacy Approver limits of 50,000, Director single-approval limit of 500,000, structured UNAUTHORIZED_ROLE and APPROVAL_LIMIT_EXCEEDED domain errors, HTTP 409 mapping, demo Director configuration, and boundary/immutability/API unit tests. Updated AGENTS.md and approval specs with the resolved role matrix. Validation: static JSON/XML and whitespace checks passed; dotnet test could not run because the .NET SDK is unavailable in this environment.
+- **Files:**
+- `AGENTS.md`
+- `specs/approval-limits-spec.md`
+- `specs/task-breakdown.md`
+- `backend/src/InvoiceApp.Domain/ApprovalService.cs`
+- `backend/src/InvoiceApp.Domain/ApprovalRejectedException.cs`
+- `backend/src/InvoiceApp.Api/Controllers/ApiControllerBase.cs`
+- `backend/src/InvoiceApp.Api/Controllers/ApprovalsController.cs`
+- `backend/src/InvoiceApp.Api/appsettings.json`
+- `backend/tests/InvoiceApp.Tests/ApprovalServiceTests.cs`
+- `backend/tests/InvoiceApp.Tests/ApprovalsControllerTests.cs`
+- `backend/tests/InvoiceApp.Tests/FakeInvoiceRepository.cs`
+- `backend/tests/InvoiceApp.Tests/InvoiceApp.Tests.csproj`
+- `ai-interaction-log.md`
+
+## 2026-11-12T04:44:35.685Z
+
+- **Agent:** copilot
+- **Step:** session-stop
+- **Prompt:**
+> Copilot session completed; see task-level entry for prompt summary.
+- **Summary:**
+> Automatic session-end audit marker. Use the structured-logging skill for the task-specific record.
+- **Files:**
+- None
+
+## 2026-11-12T04:48:53.268Z
+
+- **Agent:** Copilot
+- **Step:** install-dotnet-and-test
+- **Prompt:**
+> Install the .NET SDK after dotnet test was unavailable, then run the repository unit suite.
+- **Summary:**
+> Installed Homebrew dotnet@8 version 8.0.133 on arm64 macOS and verified the SDK/runtime. Ran dotnet test backend/InvoiceApp.sln successfully: 22 passed, 0 failed, 0 skipped. The formula is keg-only, so the test command used DOTNET_ROOT and PATH pointing at /opt/homebrew/opt/dotnet@8/libexec; no shell profile was changed.
+- **Files:**
+- `ai-interaction-log.md`
+
+## 2026-11-12T04:48:55.094Z
 
 - **Agent:** copilot
 - **Step:** session-stop

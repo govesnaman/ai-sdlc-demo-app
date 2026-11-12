@@ -1,11 +1,14 @@
+using System.Globalization;
+
 namespace InvoiceApp.Domain;
 
 /// <summary>
-/// Moves an invoice through its lifecycle: Draft -> PendingApproval -> Approved or Rejected.
-/// One invoice at a time, decided as a whole by a single approver.
+/// Moves invoices through their lifecycle and enforces approval limits.
 /// </summary>
 public class ApprovalService
 {
+    private const decimal ManagerApprovalLimit = 50_000m;
+    private const decimal DirectorApprovalLimit = 500_000m;
     private readonly IInvoiceRepository _repository;
 
     public ApprovalService(IInvoiceRepository repository)
@@ -28,10 +31,34 @@ public class ApprovalService
         return invoice;
     }
 
-    public Invoice Approve(string invoiceId, string approver)
+    public Invoice Approve(string invoiceId, string approver, string role)
     {
+        var approvalTier = role switch
+        {
+            "Manager" or "Approver" => "Manager",
+            "Director" => "Director",
+            _ => throw new ApprovalRejectedException(
+                "UNAUTHORIZED_ROLE",
+                $"Role {role} is not authorized to approve invoices")
+        };
+
         var invoice = Find(invoiceId);
         EnsurePending(invoice);
+
+        var approvalLimit = approvalTier == "Manager"
+            ? ManagerApprovalLimit
+            : DirectorApprovalLimit;
+
+        if (invoice.Amount > approvalLimit)
+        {
+            var formattedAmount = invoice.Amount.ToString(
+                "#,##0.############################",
+                CultureInfo.InvariantCulture);
+            var reason = approvalTier == "Manager"
+                ? $"Manager approval limit is 50,000; invoice amount is {formattedAmount}"
+                : $"Director single-approver limit is 500,000; invoice amount is {formattedAmount}. Dual-approver approval is not implemented yet";
+            throw new ApprovalRejectedException("APPROVAL_LIMIT_EXCEEDED", reason);
+        }
 
         invoice.Status = InvoiceStatus.Approved;
         invoice.DecidedBy = approver;

@@ -14,7 +14,7 @@ Invoice approval demo app: ASP.NET Core 8 Web API with a small static web UI.
 
 - Controllers live in `Controllers/`, one per resource, route `api/[controller]`. Request bodies are `record` types declared inside the controller.
 - Controllers inherit `ApiControllerBase` and use `Handle(...)` so service errors map to 404, 409 and 400.
-- Every endpoint is behind sign-in. Restrict actions with `[RequireRole("...")]`: destructive actions are Admin only, approvals are Approver or Admin.
+- Every endpoint is behind sign-in. Restrict destructive actions with `[RequireRole("...")]` (Admin only). Approval actions use the role policy below: the approve service must reject unsupported roles with a structured error without mutating invoice state; the explicit reject action uses `[RequireRole("Manager", "Approver", "Director", "Admin")]`.
 - Business rules go in the Domain project, never in controllers.
 - Register services in `Program.cs`. Repositories are interfaces in Domain with an in-memory implementation in Api.
 - Every new rule or endpoint needs tests. Use `FakeInvoiceRepository` in tests.
@@ -30,6 +30,7 @@ Invoice approval demo app: ASP.NET Core 8 Web API with a small static web UI.
 ## Demo accounts (not real credentials)
 
 - `demo.approver` / `ChangeMe123!` (role Approver)
+- `demo.director` / `ChangeMe123!` (role Director)
 - `demo.admin` / `ChangeMe123!` (role Admin)
 
 ## Never
@@ -43,9 +44,16 @@ This section defines the intended approval policy and implementation guidance fo
 
 ### Approval Tier Thresholds
 
-- **Manager:** may approve an invoice with an amount of `<= 50,000`.
-- **Director:** may approve an invoice with an amount of `<= 500,000`.
-- **Dual-approver rule:** an invoice with an amount of `> 500,000` requires two distinct approvers. The second approver MUST be a Director.
+| Role | Single-approver permission | First approver for `> 500,000` (Step 2) | Second approver for `> 500,000` (Step 2) |
+|---|---|---|---|
+| `Manager` | Allowed at `<= 50,000` | Allowed | Not allowed |
+| `Approver` (legacy alias) | Same as Manager: allowed at `<= 50,000` | Allowed | Not allowed |
+| `Director` | Allowed at `<= 500,000` | Allowed | Allowed and required |
+| `Admin` | Not authorized at any amount | Not allowed | Not allowed |
+| Any other role | Not authorized at any amount | Not allowed | Not allowed |
+
+- `Admin` and unsupported roles must be rejected with `UNAUTHORIZED_ROLE: Role <role> is not authorized to approve invoices`, with zero invoice-state changes.
+- **Dual-approver rule (Step 2, not Step 1):** an invoice with an amount of `> 500,000` requires TWO distinct approvers, and the second approver MUST be a Director. During Step 1, no single approval above 500,000 succeeds.
 - Apply the thresholds inclusively as written. Do not treat 50,000 or 500,000 as above its tier's limit.
 
 ### Strict Domain Invariants
@@ -60,6 +68,7 @@ This section defines the intended approval policy and implementation guidance fo
 - Approval business rules and service: `backend/src/InvoiceApp.Domain/ApprovalService.cs`.
 - Repository contract: `backend/src/InvoiceApp.Domain/IInvoiceRepository.cs`; in-memory implementation: `backend/src/InvoiceApp.Api/InMemoryInvoiceRepository.cs`.
 - HTTP approval and invoice routes: `backend/src/InvoiceApp.Api/Controllers/ApprovalsController.cs` and `backend/src/InvoiceApp.Api/Controllers/InvoicesController.cs`. Keep authorization and request/response mapping here; approval policy belongs in Domain.
+- Approval policy failures use `ApprovalRejectedException` in Domain and map to HTTP 409 with `{ "errorCode": "...", "error": "..." }` in `ApiControllerBase`.
 - Static UI components and behavior: `backend/src/InvoiceApp.Api/wwwroot/index.html`, `backend/src/InvoiceApp.Api/wwwroot/app.js`, and `backend/src/InvoiceApp.Api/wwwroot/styles.css`.
 - Unit tests: `backend/tests/InvoiceApp.Tests/ApprovalServiceTests.cs`, with `backend/tests/InvoiceApp.Tests/FakeInvoiceRepository.cs` for repository setup. Add or extend tests in the existing xUnit project `backend/tests/InvoiceApp.Tests/`.
 - Playwright E2E tests: `e2e/tests/`; page objects: `e2e/pages/`; runner configuration: `e2e/playwright.config.ts`. Use role-based locators (`getByRole`, `getByLabel`), not CSS or XPath selectors.

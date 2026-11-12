@@ -22,7 +22,7 @@ The feature must enforce:
 
 An explicit invoice rejection through the existing `Reject` endpoint is a valid business decision that transitions a pending invoice to `Rejected`. The atomic rejection invariant in this feature is about an **approval attempt refused by validation**, not about the separate intentional `Reject` action.
 
-## Current Repository Model and Paths
+## Repository Model and Paths (Baseline Before Step 1)
 
 ### Domain
 
@@ -119,34 +119,43 @@ Amounts are `Invoice.Amount` decimal values, compared inclusively against the st
 
 | Invoice amount | Required approval policy |
 |---|---|
-| `<= 50,000` | Manager or Director may approve; one successful approval transitions directly to `Approved`. |
-| `> 50,000` and `<= 500,000` | Director may approve; one successful approval transitions directly to `Approved`. A Manager approval is rejected. |
+| `<= 50,000` | Manager, legacy `Approver`, or Director may approve; one successful approval transitions directly to `Approved`. |
+| `> 50,000` and `<= 500,000` | Director may approve; one successful approval transitions directly to `Approved`. A Manager or legacy `Approver` attempt is rejected. |
 | `> 500,000` | Two distinct approvers are required. The second successful approval must be by a Director. The first approval transitions to `PartiallyApproved`; the qualifying second approval transitions to `Approved`. |
 
 Amounts in these examples are whole currency units; the implementation must compare the exact `decimal` amount and must not round an amount to a threshold before validation.
 
-### Policy decisions required before Step 2 implementation
+### Resolved Role Permission Matrix
 
-The stated rules do not identify which role may make the **first** approval above 500,000: Manager's stated ceiling is 50,000 and Director's is 500,000, while the second approver is explicitly required to be a Director. They also do not state whether the existing `Admin` role bypasses limits or maps to an approval tier. The requirements and current code do not resolve these questions. Product/policy owner must decide both before implementing the first `PartiallyApproved` transition. Do not silently treat an over-limit first approver as authorized or map Admin to Director.
+The product/policy owner resolved how existing roles map to the approval policy:
 
-Until that policy is decided, the rows for the first approval above 500,000 in the matrix are conditional and constitute an implementation blocker. The second-approver constraints are fully specified.
+| Role | Single-approver permission | First approver for `> 500,000` (Step 2) | Second approver for `> 500,000` |
+|---|---|---|---|
+| `Manager` | Allowed at `<= 50,000` | Allowed | Not allowed |
+| `Approver` (legacy alias) | Same as Manager: allowed at `<= 50,000` | Allowed | Not allowed |
+| `Director` | Allowed at `<= 500,000` | Allowed | Allowed and required |
+| `Admin` | Not authorized at any amount | Not allowed | Not allowed |
+| Any other role | Not authorized at any amount | Not allowed | Not allowed |
+
+`Admin` and unsupported roles must be rejected with `UNAUTHORIZED_ROLE: Role <role> is not authorized to approve invoices`; no approval validation failure may mutate invoice state. The first-approver role for invoices above 500,000 is resolved: Manager, legacy Approver, or Director may be first approver in Step 2. Step 1 does not implement that dual-approver behavior; all single-approver attempts above 500,000 are rejected until Step 2.
 
 ## State Transition Matrix
 
-`Approvals` below means the proposed ordered `Invoice.Approvals` collection. “Record?” indicates whether a successful approval is appended. An error leaves all invoice fields untouched. Error codes in this proposal are stable machine-readable identifiers; the current API does not yet expose an error-code field.
+`Approvals` below means the proposed ordered `Invoice.Approvals` collection. “Record?” indicates whether a successful approval is appended. An error leaves all invoice fields untouched. Error codes are stable machine-readable identifiers; before Step 1, the API did not expose a separate error-code field.
 
 | Current Status | Invoice Amount | Approver Role | Prior Approvals | Next Status | Approval Recorded? | Error Code |
 |---|---:|---|---|---|---|---|
-| `PendingApproval` | `<= 50,000` | `Manager` or `Director` | None | `Approved` | Yes | None |
+| `PendingApproval` | `<= 50,000` | `Manager`, legacy `Approver`, or `Director` | None | `Approved` | Yes | None |
 | `PendingApproval` | `> 50,000` and `<= 500,000` | `Director` | None | `Approved` | Yes | None |
-| `PendingApproval` | `<= 50,000` | `Manager` or `Director` | Any existing record | Unchanged | No | `APPROVAL_ALREADY_RECORDED` |
-| `PendingApproval` | `> 50,000` and `<= 500,000` | `Manager` | None | Unchanged | No | `APPROVAL_LIMIT_EXCEEDED` |
-| `PendingApproval` | `> 500,000` | First-approver role (not yet specified) | None | `PartiallyApproved` if that role is authorized; otherwise unchanged | Yes only if authorized | `FIRST_APPROVER_ROLE_UNDEFINED` until policy is decided |
+| `PendingApproval` | `> 50,000` and `<= 500,000` | `Manager` or legacy `Approver` | None | Unchanged | No | `APPROVAL_LIMIT_EXCEEDED` |
+| `PendingApproval` | `> 500,000` | Any role in Step 1 | None | Unchanged | No | `APPROVAL_LIMIT_EXCEEDED` (Step 1; dual approval is Step 2) |
+| `PendingApproval` | Any | `Admin` or any unsupported role | Any | Unchanged | No | `UNAUTHORIZED_ROLE` |
+| `PendingApproval` | Any | Any supported role | Any existing record | Unchanged | No | `APPROVAL_ALREADY_RECORDED` |
 | `PartiallyApproved` | `> 500,000` | Same `UserId` as the first approver | Exactly one record | Unchanged (`PartiallyApproved`) | No | `DUPLICATE_APPROVER` |
 | `PartiallyApproved` | `> 500,000` | Any role other than `Director` | Exactly one record by a distinct user | Unchanged (`PartiallyApproved`) | No | `DIRECTOR_REQUIRED` |
 | `PartiallyApproved` | `> 500,000` | `Director` | Exactly one record by a distinct user | `Approved` | Yes | None |
 | `Draft`, `Approved`, or `Rejected` | Any | Any | Any | Unchanged | No | `INVALID_INVOICE_STATUS` |
-| Any approval-eligible status | Any | Not authorized to access the approval route | Any | Unchanged | No | HTTP 403; route authorization failure |
+| Any status | Any | Not authorized to access a role-restricted route | Any | Unchanged | No | HTTP 403; route authorization failure |
 | Any status | Any | N/A | Any | Unchanged | No | `INVOICE_NOT_FOUND` (HTTP 404) |
 
 For amount-limit failures where the Manager/Director policy directly specifies the limit, use `APPROVAL_LIMIT_EXCEEDED`. `DUPLICATE_APPROVER` is mandatory when the same `UserId` attempts to satisfy the second-approver slot, even if other validations would also fail; validation precedence should be deterministic and tested. If more than one condition fails, return one stable primary error and do not mutate invoice state.
@@ -190,15 +199,16 @@ Use the corresponding stable code and descriptive message for each rule failure.
 
 | Condition | HTTP status | `errorCode` |
 |---|---:|---|
-| Manager exceeds 50,000 or Director exceeds the applicable single-approver limit | 409 | `APPROVAL_LIMIT_EXCEEDED` |
+| Manager/legacy Approver exceeds 50,000 or Director exceeds 500,000 in Step 1 | 409 | `APPROVAL_LIMIT_EXCEEDED` |
+| Caller role is `Admin` or otherwise unsupported | 409 | `UNAUTHORIZED_ROLE` |
 | Second approval attempted by the first approver's `UserId` | 409 | `DUPLICATE_APPROVER` |
 | Second approver is not a Director | 409 | `DIRECTOR_REQUIRED` |
 | An approval is attempted from a state that cannot be approved | 409 | `INVALID_INVOICE_STATUS` |
 | Invoice does not exist | 404 | `INVOICE_NOT_FOUND` |
-| Caller is not authorized for the route | 403 | Existing route authorization response; no invoice mutation |
+| Caller is not signed in or is blocked from a role-restricted route | 401/403 | Existing authentication/authorization response; no invoice mutation |
 | Malformed/missing required request data | 400 | Existing validation behavior unless an explicit typed code is added |
 
-The current controller has no role parameter in its `Approve` service call, and the current base controller emits only `{ error }`. Implementing this contract requires carrying identity and role into domain validation and extending the API error mapping without changing success response serialization unnecessarily.
+Before Step 1, the controller did not pass the session role to `Approve`, and the base controller emitted only `{ error }`. Step 1 passes the role into domain validation and maps `ApprovalRejectedException` to HTTP 409 with `{ "errorCode": "...", "error": "..." }`, without changing success response serialization. The approve route remains behind session authentication; domain validation returns `UNAUTHORIZED_ROLE` for Admin and unsupported roles. The explicit reject route remains role-restricted.
 
 ### UI behavior
 
@@ -218,11 +228,9 @@ Do not optimistically change the status, remove the invoice from the pending lis
 8. The UI presents the failure reason and leaves the invoice visibly unchanged and actionable.
 9. Unit, API-contract, and Playwright coverage exercises required threshold and negative-invariant cases.
 
-## Open Questions / Blocking Decisions
+## Remaining Decisions
 
-1. Which role may make the first approval of an invoice above 500,000, given both stated single-approver ceilings?
-2. Does existing `Admin` retain an override, map to Director, or become non-approving for this feature? This spec does not assume any of these.
-3. Should `UserId` be added to configured users and sessions, or should the current unique username be formally designated as the stable identifier?
-4. Does product policy allow explicit rejection of a `PartiallyApproved` invoice? This proposal recommends preserving the current ability to reject after any in-progress approval.
+1. Before Step 2, decide whether to add a separate stable `UserId` to configured users and sessions or formally designate the unique username as the stable identifier for duplicate-approver checks.
+2. Confirm whether intentional rejection of a `PartiallyApproved` invoice is allowed. This proposal recommends preserving the existing ability to reject an in-progress invoice.
 
-Resolve questions 1–3 before implementation can claim complete enforcement of all roles and dual-approval entry behavior.
+The first-approver permissions above 500,000 and the treatment of `Admin` are resolved by the role matrix above. Step 1 must not implement any dual-approver transitions.

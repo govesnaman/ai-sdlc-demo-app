@@ -10,25 +10,26 @@
 
 ## Pre-Implementation Gate
 
-Before Step 2, the policy owner must decide:
+The role policy is resolved and recorded in `approval-limits-spec.md` and `AGENTS.md`:
 
-- Which role can create the first approval for an invoice above 500,000, given the Manager 50,000 and Director 500,000 ceilings.
-- Whether `Admin` has approval override authority, maps to Director, or is not an approver for these rules.
-- Whether configured username is the stable `UserId` or users/sessions need a separate `UserId`.
+- `Approver` is a legacy alias for Manager.
+- Manager and Approver may be first but not second approvers above 500,000 in Step 2.
+- Director may be first or second and is required as the second approver above 500,000 in Step 2.
+- Admin and all unsupported roles cannot approve.
 
-Record those decisions in the feature specification before implementing code; do not infer them from current `Approver`/`Admin` authorization. Step 1 may implement and test the unambiguous single-approver thresholds while over-500,000 invoices remain rejected as requiring the forthcoming dual-approval workflow.
+Before Step 2, decide whether to add a separate stable `UserId` or designate username as the stable identifier, and confirm whether partially approved invoices may be intentionally rejected. Step 1 must reject all single approval attempts above 500,000; it must not implement dual-approval transitions.
 
 ## Step 1 (Commit 1): Single-Approver Limits
 
 ### Scope
 
-Implement Manager approval for invoices `<= 50,000` and Director approval for invoices `<= 500,000`. An amount above the acting role's single-approver ceiling must be refused with a descriptive error. Do not implement `PartiallyApproved` or count multiple approvals in this commit.
+Implement Manager and legacy `Approver` approval for invoices `<= 50,000` and Director approval for invoices `<= 500,000`. Reject `Admin` and unsupported roles with `UNAUTHORIZED_ROLE`. An amount above the acting role's single-approver ceiling must be refused with a descriptive error. Do not implement `PartiallyApproved` or count multiple approvals in this commit.
 
 ### Paths
 
-- Domain model and policy: `backend/src/InvoiceApp.Domain/Invoice.cs`, `backend/src/InvoiceApp.Domain/InvoiceStatus.cs` (only if needed), `backend/src/InvoiceApp.Domain/ApprovalService.cs`.
-- Identity/role propagation as required to enforce the policy: `backend/src/InvoiceApp.Api/Auth/UserSession.cs`, `backend/src/InvoiceApp.Api/Controllers/AuthController.cs`, `backend/src/InvoiceApp.Api/Controllers/ApprovalsController.cs`, and role/user configuration in `backend/src/InvoiceApp.Api/appsettings.json`.
-- Unit tests: `backend/tests/InvoiceApp.Tests/ApprovalServiceTests.cs`; use `backend/tests/InvoiceApp.Tests/FakeInvoiceRepository.cs`.
+- Domain policy and error type: `backend/src/InvoiceApp.Domain/ApprovalService.cs` and `backend/src/InvoiceApp.Domain/ApprovalRejectedException.cs`.
+- API role propagation and error mapping: `backend/src/InvoiceApp.Api/Controllers/ApprovalsController.cs`, `backend/src/InvoiceApp.Api/Controllers/ApiControllerBase.cs`, and role/user configuration in `backend/src/InvoiceApp.Api/appsettings.json`.
+- Unit and API contract tests: `backend/tests/InvoiceApp.Tests/ApprovalServiceTests.cs`, `backend/tests/InvoiceApp.Tests/ApprovalsControllerTests.cs`, and `backend/tests/InvoiceApp.Tests/FakeInvoiceRepository.cs`.
 
 ### Required tests
 
@@ -40,9 +41,11 @@ For every failed approval, assert the descriptive failure and exact before/after
 
 - [ ] Manager succeeds at 49,999 and 50,000.
 - [ ] Manager is rejected at 50,001 without any invoice mutation.
+- [ ] Legacy `Approver` succeeds through 50,000 and is rejected above 50,000 as the Manager alias.
 - [ ] Director succeeds at 49,999, 50,000, 50,001, 499,999, and 500,000.
 - [ ] Director cannot single-approve 500,001.
-- [ ] Errors are clear and map to the specified API response contract.
+- [ ] `Admin` and unsupported roles receive `UNAUTHORIZED_ROLE` without invoice mutation.
+- [ ] Limit and role errors are clear and map to HTTP 409 with `errorCode` and `error` fields.
 - [ ] Failed attempts leave `Status`, `Approvals` (if introduced), `CreatedAt`, `DecidedBy`, `DecidedAt`, and `DecisionNote` unchanged and do not persist.
 - [ ] `dotnet test backend/InvoiceApp.sln` passes.
 - [ ] Commit 1 contains only Step 1 production changes and their direct unit tests/documentation needed for those changes.
@@ -51,7 +54,7 @@ For every failed approval, assert the descriptive failure and exact before/after
 
 ### Scope
 
-Implement the `> 500,000` path using `InvoiceStatus.PartiallyApproved`, an ordered approval history, two distinct stable `UserId` values, and the required Director role for the second approval. No invoice above 500,000 can reach `Approved` after only one successful approval. Resolve the pre-implementation policy gate before coding the first-approver role and Admin behavior.
+Implement the `> 500,000` path using `InvoiceStatus.PartiallyApproved`, an ordered approval history, two distinct stable `UserId` values, and the required Director role for the second approval. No invoice above 500,000 can reach `Approved` after only one successful approval. The first- and second-approver roles and Admin behavior are resolved in the role matrix above; resolve the remaining stable-identity decision before implementing duplicate checks.
 
 ### Paths
 
