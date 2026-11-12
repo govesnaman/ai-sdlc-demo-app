@@ -4,14 +4,14 @@
 
 This feature enforces approval limits in the Domain service, carries the authenticated role from the API into that service, and preserves invoice state when an approval attempt is rejected.
 
-| Approver role | Approval rule |
-|---|---|
-| `Manager` | May approve invoices with `amount <= 50,000`. |
-| `Approver` | Legacy alias for `Manager`, with the same `<= 50,000` limit. |
-| `Director` | May approve invoices with `amount <= 500,000`. |
-| Any authorized first approver | May make the first approval for an invoice above `500,000`; the invoice becomes `PartiallyApproved`. |
-| Second approver above `500,000` | Must be a distinct user with the `Director` role; the invoice then becomes `Approved`. |
-| `Admin` or unsupported role | Approval is rejected with `UNAUTHORIZED_ROLE`. |
+| Approver role                   | Approval rule                                                                                        |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `Manager`                       | May approve invoices with `amount <= 50,000`.                                                        |
+| `Approver`                      | Legacy alias for `Manager`, with the same `<= 50,000` limit.                                         |
+| `Director`                      | May approve invoices with `amount <= 500,000`.                                                       |
+| Any authorized first approver   | May make the first approval for an invoice above `500,000`; the invoice becomes `PartiallyApproved`. |
+| Second approver above `500,000` | Must be a distinct user with the `Director` role; the invoice then becomes `Approved`.               |
+| `Admin` or unsupported role     | Approval is rejected with `UNAUTHORIZED_ROLE`.                                                       |
 
 `ApprovalsController` passes the authenticated `UserSession.Username` and role to the approval service. The username is normalized using `Trim().ToLowerInvariant()` for the approval record's stable `UserId`; duplicate detection ignores casing and surrounding whitespace. Rejected approval attempts return a descriptive domain error and must not change invoice status, approval history, decision metadata, or timestamps.
 
@@ -23,13 +23,13 @@ The feature requirements and implementation sequence are documented in [specs/ap
 
 The branch contains five standalone commits: two setup/specification commits, followed by three feature steps.
 
-| Commit | Scope |
-|---|---|
-| `0cf53e0` | Add `AGENTS.md`, agent instructions, structured logging, and commit hook setup. |
-| `25f9e44` | Add the approval-limits specification and phased task breakdown. |
-| `821188c` | Step 1: enforce Manager/legacy Approver and Director single-approver limits with boundary tests. |
+| Commit    | Scope                                                                                                 |
+| --------- | ----------------------------------------------------------------------------------------------------- |
+| `0cf53e0` | Add `AGENTS.md`, agent instructions, structured logging, and commit hook setup.                       |
+| `25f9e44` | Add the approval-limits specification and phased task breakdown.                                      |
+| `821188c` | Step 1: enforce Manager/legacy Approver and Director single-approver limits with boundary tests.      |
 | `8c59318` | Step 2: add the `> 500,000` dual-approver flow and distinct-user/Director-second-approver invariants. |
-| `0757be1` | Step 3: add the Playwright rejection flow and mutation-test hardening. |
+| `0757be1` | Step 3: add the Playwright rejection flow and mutation-test hardening.                                |
 
 The three feature commits implement the sequential steps described in the task breakdown; the first two commits establish the workflow and specification.
 
@@ -73,14 +73,14 @@ The root npm `test` script is a placeholder and the root npm Stryker/Vitest runn
 
 The diff was reviewed against `AGENTS.md`, `.github/agents/reviewer-agent.agent.md`, and repository conventions. No separate workshop review prompt was found in `.github/prompts/` or `docs/`. No actionable approval-domain, API-error-handling, or UI-rejection defect was identified in the reviewed implementation. The findings below concern review reproducibility and completion documentation.
 
-| Finding # | File & Line | Finding & Risk | Actionable Fix | Suggested Verdict |
-|---:|---|---|---|---|
-| 1 | `AGENTS.md` Stryker command | The previous guidance pointed to an unavailable `dotnet stryker` command, which prevented running mutation tests. | **Fixed:** documented the pinned install, corrected executable `dotnet-stryker`, the standard global-tool PATH location, and the invocation targeting `ApprovalService.cs`; clarified the npm limitation. | Fixed |
-| 2 | `specs/task-breakdown.md` mutation results | The previous 92.63% summary omitted mutant categories. | **Fixed:** recorded the exact target and full 4.16.0 breakdown (88 killed, 2 equivalent survivors, 5 no coverage, 7 compile errors), plus a repeat 4.13.0 result. | Fixed |
-| 3 | `specs/task-breakdown.md` verification checklists | Step 3 isolation and final acceptance were not marked complete despite the commit sequence and test evidence. | **Fixed:** reconciled checkboxes with commits `0cf53e0`, `25f9e44`, `821188c`, `8c59318`, `0757be1` and verified runs (38 unit tests, 1 E2E test). | Fixed |
+| Finding # | File & Line                                       | Finding & Risk                                                                                                    | Actionable Fix                                                                                                                                                                                            | Suggested Verdict |
+| --------: | ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------- |
+|         1 | `AGENTS.md` Stryker command                       | The previous guidance pointed to an unavailable `dotnet stryker` command, which prevented running mutation tests. | **Fixed:** documented the pinned install, corrected executable `dotnet-stryker`, the standard global-tool PATH location, and the invocation targeting `ApprovalService.cs`; clarified the npm limitation. | Fixed             |
+|         2 | `specs/task-breakdown.md` mutation results        | The previous 92.63% summary omitted mutant categories.                                                            | **Fixed:** recorded the exact target and full 4.16.0 breakdown (88 killed, 2 equivalent survivors, 5 no coverage, 7 compile errors), plus a repeat 4.13.0 result.                                         | Fixed             |
+|         3 | `specs/task-breakdown.md` verification checklists | Step 3 isolation and final acceptance were not marked complete despite the commit sequence and test evidence.     | **Fixed:** reconciled checkboxes with commits `0cf53e0`, `25f9e44`, `821188c`, `8c59318`, `0757be1` and verified runs (38 unit tests, 1 E2E test).                                                        | Fixed             |
 
 All three findings are fixed in the documentation-polish pass; the Stryker executable name and PATH prerequisite are clarified here without changing application code.
 
 ## Demo Video
 
-[Watch 8–10 Minute Demo Video](<PASTE_VIDEO_URL_HERE>)
+[Watch Demo Video](https://drive.google.com/file/d/1_aAqfwWxuKwl8PmW3pgG7Tu5u7PhtP95/view?usp=drive_link)
