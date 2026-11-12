@@ -17,7 +17,7 @@ The role policy is resolved and recorded in `approval-limits-spec.md` and `AGENT
 - Director may be first or second and is required as the second approver above 500,000 in Step 2.
 - Admin and all unsupported roles cannot approve.
 
-Before Step 2, decide whether to add a separate stable `UserId` or designate username as the stable identifier, and confirm whether partially approved invoices may be intentionally rejected. Step 1 must reject all single approval attempts above 500,000; it must not implement dual-approval transitions.
+The stable identity decision is resolved: `UserSession.Username.Trim().ToLowerInvariant()` is the approval `UserId`, with case-insensitive duplicate checks. Intentional rejection of a partially approved invoice remains supported. Step 1 rejects all single approval attempts above 500,000; Step 2 implements the two-approver flow.
 
 ## Step 1 (Commit 1): Single-Approver Limits
 
@@ -54,7 +54,7 @@ For every failed approval, assert the descriptive failure and exact before/after
 
 ### Scope
 
-Implement the `> 500,000` path using `InvoiceStatus.PartiallyApproved`, an ordered approval history, two distinct stable `UserId` values, and the required Director role for the second approval. No invoice above 500,000 can reach `Approved` after only one successful approval. The first- and second-approver roles and Admin behavior are resolved in the role matrix above; resolve the remaining stable-identity decision before implementing duplicate checks.
+Implement the `> 500,000` path using `InvoiceStatus.PartiallyApproved`, an ordered approval history, two distinct stable `UserId` values, and the required Director role for the second approval. No invoice above 500,000 can reach `Approved` after only one successful approval. The role and identity decisions are resolved in the role matrix and stable-identity section above.
 
 ### Paths
 
@@ -67,8 +67,10 @@ Implement the `> 500,000` path using `InvoiceStatus.PartiallyApproved`, an order
 
 - First valid approval produces `PartiallyApproved` with exactly one `ApprovalRecord` and leaves final-decision metadata unchanged.
 - A distinct Director second approval produces `Approved`, appends exactly one record, and sets final decision metadata according to the specification.
-- Reusing the first approver's `UserId` returns `DUPLICATE_APPROVER` even when the name/session differs; no mutation or repository update occurs.
-- A non-Director second approver returns `DIRECTOR_REQUIRED`; no mutation or repository update occurs.
+- Every approval record stores normalized `UserId = UserSession.Username.Trim().ToLowerInvariant()`, the role, and its UTC approval timestamp.
+- Reusing the first approver's normalized `UserId` returns `DUPLICATE_APPROVER`, including capitalization and outer-whitespace variants; no mutation or repository update occurs.
+- A non-Director second approver returns `INVALID_SECOND_APPROVER`; no mutation or repository update occurs.
+- Any attempt to approve an already approved invoice returns `ALREADY_APPROVED` without mutation or repository update.
 - The first approval cannot skip directly to `Approved`.
 - A second approval cannot be recorded when the invoice is already final or when the approval history is inconsistent.
 - All rejection cases compare the full before/after state, including collection contents and ordering, all timestamps, `DecidedBy`, `DecidedAt`, and `DecisionNote`.
@@ -76,13 +78,13 @@ Implement the `> 500,000` path using `InvoiceStatus.PartiallyApproved`, an order
 
 ### Verification checklist
 
-- [ ] The policy questions are recorded and implementation behavior matches those decisions.
-- [ ] `PartiallyApproved` is used only while exactly one qualifying approval is recorded for the dual-approval tier.
-- [ ] No `UserId` is counted twice; identity comparison uses the stable identifier, not display name.
-- [ ] The second approver above 500,000 is a Director.
-- [ ] Each failed approval returns the specified error and performs zero invoice/repository mutations.
-- [ ] API status, `errorCode`, and `error` values match the contract.
-- [ ] `dotnet test backend/InvoiceApp.sln` passes, including all six threshold amounts and negative invariants.
+- [x] The role and identity policy decisions are documented and implementation behavior matches those decisions.
+- [x] `PartiallyApproved` is used only while exactly one qualifying approval is recorded for the dual-approval tier.
+- [x] No normalized `UserId` is counted twice; identity comparison ignores case and surrounding whitespace.
+- [x] The second approver above 500,000 is a Director.
+- [x] Each failed approval returns the specified error and performs zero invoice/repository mutations.
+- [x] API status, `errorCode`, and `error` values match the contract.
+- [x] `dotnet test backend/InvoiceApp.sln` passes, including threshold and negative-invariant tests.
 - [ ] Commit 2 depends on Commit 1 and includes only the dual-approval domain/API behavior and its direct unit tests.
 
 ## Step 3 (Commit 3): UI E2E and Mutation Verification

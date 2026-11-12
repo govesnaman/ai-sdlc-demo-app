@@ -77,13 +77,17 @@ Add `backend/src/InvoiceApp.Domain/ApprovalRecord.cs`, following the existing mu
 
 Initialize non-null strings to `string.Empty`, consistent with `Invoice`. One record represents one successful approval action, not an attempted or rejected action.
 
+### Stable approver identity resolution
+
+For this in-memory demo, use the authenticated `UserSession.Username` as the stable `UserId`; do not add a separate configured identity field. Normalize it with `Trim().ToLowerInvariant()` before storing it in `ApprovalRecord.UserId` and before duplicate comparisons. This makes identity comparison case-insensitive and insensitive to leading/trailing whitespace. Preserve the role snapshot as the authenticated role string.
+
 ### `Invoice`
 
 Update `backend/src/InvoiceApp.Domain/Invoice.cs`:
 
 | Property | Proposed C# type | Change and semantics |
 |---|---|---|
-| `Approvals` | `List<ApprovalRecord>` | Add, initialized to `new()`. Canonical ordered history of successful approvals; append only after all validation passes. |
+| `Approvals` | `List<ApprovalRecord>` | Add, initialized to `new()`. Canonical ordered history of successful approvals; append only after all validation passes. Store one record for each successful single approval and each successful approval in the dual-approval tier. |
 | `Status` | `InvoiceStatus` | Continue using the enum; add the `PartiallyApproved` member as described below. |
 | `DecidedBy` | `string?` | Preserve for compatibility; set to the final approver on transition to `Approved`, and to the rejecting user on intentional transition to `Rejected`. Do not change it on a failed attempt or partial approval. |
 | `DecidedAt` | `DateTime?` | Preserve for compatibility; set only on final approval or intentional rejection. Do not change it on a failed attempt or partial approval. |
@@ -107,11 +111,9 @@ Intentional rejection remains:
 
 The treatment of intentionally rejecting an already `PartiallyApproved` invoice should remain supported unless product policy explicitly prohibits it; preserve the rejection reason and final decision metadata without removing the existing approval history.
 
-### Identity propagation prerequisite
+### Identity propagation
 
-The approval service must receive the approver's stable `UserId` and role, rather than only the current username string. This requires changes to the authentication/session boundary (`backend/src/InvoiceApp.Api/Auth/UserSession.cs`, `backend/src/InvoiceApp.Api/Auth/SessionStore.cs`, `backend/src/InvoiceApp.Api/Controllers/AuthController.cs`, and configured `DemoUser` data in `backend/src/InvoiceApp.Api/appsettings.json`) and to `ApprovalsController`. The domain must not depend on API authentication types; pass primitive domain inputs or a domain-level approver value.
-
-The current app has no account identifier distinct from `Username`. Decide whether configured usernames become stable IDs or whether a separate configured `UserId` is added before implementation. This choice must not compromise the duplicate-approver invariant.
+The approval service receives a stable approver identifier and role as primitive inputs; the Domain project does not depend on API authentication types. For this in-memory demo, use `UserSession.Username.Trim().ToLowerInvariant()` as the stable `UserId` for approval history and duplicate comparisons. Do not add a separate configured `UserId` unless the app later adopts an identity provider with a distinct immutable subject identifier.
 
 ## Approval Tier Rules
 
@@ -149,12 +151,13 @@ The product/policy owner resolved how existing roles map to the approval policy:
 | `PendingApproval` | `> 50,000` and `<= 500,000` | `Director` | None | `Approved` | Yes | None |
 | `PendingApproval` | `> 50,000` and `<= 500,000` | `Manager` or legacy `Approver` | None | Unchanged | No | `APPROVAL_LIMIT_EXCEEDED` |
 | `PendingApproval` | `> 500,000` | Any role in Step 1 | None | Unchanged | No | `APPROVAL_LIMIT_EXCEEDED` (Step 1; dual approval is Step 2) |
+| `PendingApproval` | `> 500,000` | `Manager`, legacy `Approver`, or `Director` (Step 2) | None | `PartiallyApproved` | Yes | None |
 | `PendingApproval` | Any | `Admin` or any unsupported role | Any | Unchanged | No | `UNAUTHORIZED_ROLE` |
-| `PendingApproval` | Any | Any supported role | Any existing record | Unchanged | No | `APPROVAL_ALREADY_RECORDED` |
-| `PartiallyApproved` | `> 500,000` | Same `UserId` as the first approver | Exactly one record | Unchanged (`PartiallyApproved`) | No | `DUPLICATE_APPROVER` |
-| `PartiallyApproved` | `> 500,000` | Any role other than `Director` | Exactly one record by a distinct user | Unchanged (`PartiallyApproved`) | No | `DIRECTOR_REQUIRED` |
+| `PartiallyApproved` | `> 500,000` | Same normalized `UserId` as the first approver | Exactly one record | Unchanged (`PartiallyApproved`) | No | `DUPLICATE_APPROVER` |
+| `PartiallyApproved` | `> 500,000` | Any role other than `Director` | Exactly one record by a distinct normalized `UserId` | Unchanged (`PartiallyApproved`) | No | `INVALID_SECOND_APPROVER` |
 | `PartiallyApproved` | `> 500,000` | `Director` | Exactly one record by a distinct user | `Approved` | Yes | None |
-| `Draft`, `Approved`, or `Rejected` | Any | Any | Any | Unchanged | No | `INVALID_INVOICE_STATUS` |
+| `Approved` | Any | Any authorized role | Any | Unchanged | No | `ALREADY_APPROVED` |
+| `Draft` or `Rejected` | Any | Any | Any | Unchanged | No | `INVALID_INVOICE_STATUS` |
 | Any status | Any | Not authorized to access a role-restricted route | Any | Unchanged | No | HTTP 403; route authorization failure |
 | Any status | Any | N/A | Any | Unchanged | No | `INVOICE_NOT_FOUND` (HTTP 404) |
 
@@ -167,6 +170,7 @@ For a valid `Reject` request, the existing explicit decision behavior is separat
 ### Duplicate Approver Invariant
 
 - No two entries in `Invoice.Approvals` for the same invoice may have equal `UserId` values.
+- Derive the ID from `UserSession.Username.Trim().ToLowerInvariant()`; compare normalized IDs using case-insensitive equality so capitalization and leading/trailing whitespace cannot bypass this invariant.
 - A retry by the first approver cannot satisfy the second-approval requirement, regardless of role changes or display-name differences.
 - Reject the attempt with code `DUPLICATE_APPROVER` and a human-readable explanation.
 - Do not append a record, change status, update final-decision fields, or alter any timestamp.
@@ -201,8 +205,9 @@ Use the corresponding stable code and descriptive message for each rule failure.
 |---|---:|---|
 | Manager/legacy Approver exceeds 50,000 or Director exceeds 500,000 in Step 1 | 409 | `APPROVAL_LIMIT_EXCEEDED` |
 | Caller role is `Admin` or otherwise unsupported | 409 | `UNAUTHORIZED_ROLE` |
-| Second approval attempted by the first approver's `UserId` | 409 | `DUPLICATE_APPROVER` |
-| Second approver is not a Director | 409 | `DIRECTOR_REQUIRED` |
+| Second approval attempted by the first approver's normalized `UserId` | 409 | `DUPLICATE_APPROVER` |
+| Second approver is not a Director | 409 | `INVALID_SECOND_APPROVER` |
+| Invoice is already `Approved` | 409 | `ALREADY_APPROVED` |
 | An approval is attempted from a state that cannot be approved | 409 | `INVALID_INVOICE_STATUS` |
 | Invoice does not exist | 404 | `INVOICE_NOT_FOUND` |
 | Caller is not signed in or is blocked from a role-restricted route | 401/403 | Existing authentication/authorization response; no invoice mutation |

@@ -191,3 +191,57 @@ This append-only Markdown log records AI-assisted task activity and commit prepa
 > Automatic session-end audit marker. Use the structured-logging skill for the task-specific record.
 - **Files:**
 - None
+
+## 2026-11-12T04:51:19.675Z
+
+- **Agent:** git-hook
+- **Step:** prepare-commit-msg
+- **Prompt:**
+> Automatic Git commit audit record.
+- **Summary:**
+> A commit was prepared; refer to Git commit metadata for its message.
+- **Files:**
+- `AGENTS.md`
+- `ai-interaction-log.md`
+- `backend/src/InvoiceApp.Api/Controllers/ApiControllerBase.cs`
+- `backend/src/InvoiceApp.Api/Controllers/ApprovalsController.cs`
+- `backend/src/InvoiceApp.Api/appsettings.json`
+- `backend/src/InvoiceApp.Domain/ApprovalRejectedException.cs`
+- `backend/src/InvoiceApp.Domain/ApprovalService.cs`
+- `backend/tests/InvoiceApp.Tests/ApprovalServiceTests.cs`
+- `backend/tests/InvoiceApp.Tests/ApprovalsControllerTests.cs`
+- `backend/tests/InvoiceApp.Tests/FakeInvoiceRepository.cs`
+- `backend/tests/InvoiceApp.Tests/InvoiceApp.Tests.csproj`
+- `package.json`
+- `specs/approval-limits-spec.md`
+- `specs/task-breakdown.md`
+
+## 2026-11-12T04:55:50.695Z
+
+- **Agent:** coder-agent + qa-agent
+- **Step:** step-2-dual-approver-rules
+- **Prompt:**
+> Implement dual approvals above 500,000, normalized distinct-approver enforcement, atomic rejection, focused unit tests, and record the stable username identity decision.
+- **Summary:**
+> Added ApprovalRecord and PartiallyApproved. Invoices above 500,000 now require two records from distinct normalized usernames; first approver may be Manager, legacy Approver, or Director, and the second must be Director. Added ALREADY_APPROVED and INVALID_SECOND_APPROVER errors, preserved approval history on explicit rejection, and added full JSON state-snapshot assertions across rejection paths. Resolved identity mapping in AGENTS.md/specs. dotnet test backend/InvoiceApp.sln passed: 32 passed, 0 failed, 0 skipped.
+- **Files:**
+- `AGENTS.md`
+- `specs/approval-limits-spec.md`
+- `specs/task-breakdown.md`
+- `backend/src/InvoiceApp.Domain/ApprovalRecord.cs`
+- `backend/src/InvoiceApp.Domain/Invoice.cs`
+- `backend/src/InvoiceApp.Domain/InvoiceStatus.cs`
+- `backend/src/InvoiceApp.Domain/ApprovalService.cs`
+- `backend/tests/InvoiceApp.Tests/ApprovalServiceTests.cs`
+- `ai-interaction-log.md`
+
+## 2026-11-12T04:55:54.370Z
+
+- **Agent:** copilot
+- **Step:** session-stop
+- **Prompt:**
+> Copilot session completed; see task-level entry for prompt summary.
+- **Summary:**
+> Automatic session-end audit marker. Use the structured-logging skill for the task-specific record.
+- **Files:**
+- None

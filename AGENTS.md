@@ -59,12 +59,13 @@ This section defines the intended approval policy and implementation guidance fo
 ### Strict Domain Invariants
 
 - **Distinct approvers:** the same `userId` must never count as both approvers for one invoice. Compare stable user identifiers, not display names or session instances.
+- **Demo identity mapping:** use `UserSession.Username.Trim().ToLowerInvariant()` as the stable `UserId` in approval history. Compare normalized IDs case-insensitively so capitalization or surrounding whitespace cannot bypass duplicate detection.
 - **Atomic rejection and immutability:** if an approval attempt is rejected, return a clear, descriptive error reason. Do not modify any invoice state: status, approver history, and timestamps must remain exactly as they were before the attempt. Validate all applicable conditions before mutating or persisting invoice state.
 - Keep these rules in `ApprovalService` and the domain model as appropriate; do not implement business rules in controllers or the UI.
 
 ### Repository Layers and Exact Paths
 
-- Domain entities and lifecycle state: `backend/src/InvoiceApp.Domain/Invoice.cs` and `backend/src/InvoiceApp.Domain/InvoiceStatus.cs`.
+- Domain entities and lifecycle state: `backend/src/InvoiceApp.Domain/Invoice.cs`, `backend/src/InvoiceApp.Domain/ApprovalRecord.cs`, and `backend/src/InvoiceApp.Domain/InvoiceStatus.cs`.
 - Approval business rules and service: `backend/src/InvoiceApp.Domain/ApprovalService.cs`.
 - Repository contract: `backend/src/InvoiceApp.Domain/IInvoiceRepository.cs`; in-memory implementation: `backend/src/InvoiceApp.Api/InMemoryInvoiceRepository.cs`.
 - HTTP approval and invoice routes: `backend/src/InvoiceApp.Api/Controllers/ApprovalsController.cs` and `backend/src/InvoiceApp.Api/Controllers/InvoicesController.cs`. Keep authorization and request/response mapping here; approval policy belongs in Domain.
