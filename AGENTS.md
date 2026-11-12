@@ -80,8 +80,8 @@ Use the repository's existing runners and package managers:
 
 - Unit tests (xUnit, from the repository root): `dotnet test backend/InvoiceApp.sln`
 - Playwright E2E tests (npm package in `e2e/`): `cd e2e && npm test`
-- C# mutation testing uses the pinned Stryker.NET global tool. Install it with `dotnet tool install -g dotnet-stryker --version 4.13.0`, then run from the unit-test project directory:
-  `cd backend/tests/InvoiceApp.Tests && dotnet stryker --project InvoiceApp.Domain.csproj --test-project InvoiceApp.Tests.csproj --mutate '**/ApprovalService.cs' --concurrency 2 --reporter ClearTextTree --reporter Json --output /tmp/stryker-approval-service`
+- C# mutation testing uses the pinned Stryker.NET global tool. Install it with `dotnet tool install --global dotnet-stryker --version 4.13.0`. The tool's executable is `dotnet-stryker` (not `dotnet stryker`). If the shell cannot find it, add the global tools directory to `PATH` (`$HOME/.dotnet/tools` on macOS/Linux; `%USERPROFILE%\.dotnet\tools` on Windows), then open a new shell. Run from the unit-test project directory:
+  `cd backend/tests/InvoiceApp.Tests && dotnet-stryker --project InvoiceApp.Domain.csproj --test-project InvoiceApp.Tests.csproj --mutate '**/ApprovalService.cs' --concurrency 2 --reporter ClearTextTree --reporter Json --output /tmp/stryker-approval-service`
   The root npm Stryker/Vitest runner does not mutate this C# domain.
 
 For approval-limit changes, include boundary tests at **49,999**, **50,000**, **50,001**, **499,999**, **500,000**, and **500,001**. Also test the negative invariants: a repeated `userId` cannot satisfy the two-approver requirement; a non-Director cannot be the required second approver for an invoice above 500,000; and every rejected attempt returns a descriptive reason while leaving status, approver history, and timestamps unchanged.

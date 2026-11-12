@@ -75,11 +75,11 @@ The diff was reviewed against `AGENTS.md`, `.github/agents/reviewer-agent.agent.
 
 | Finding # | File & Line | Finding & Risk | Actionable Fix | Suggested Verdict |
 |---:|---|---|---|---|
-| 1 | `AGENTS.md` Stryker command | The previous guidance pointed to the npm runner, which does not mutate the C# domain. | **Fixed:** documented `dotnet tool install -g dotnet-stryker --version 4.13.0` and the `dotnet stryker` command targeting `ApprovalService.cs`; clarified the npm limitation. | Fixed |
+| 1 | `AGENTS.md` Stryker command | The previous guidance pointed to an unavailable `dotnet stryker` command, which prevented running mutation tests. | **Fixed:** documented the pinned install, corrected executable `dotnet-stryker`, the standard global-tool PATH location, and the invocation targeting `ApprovalService.cs`; clarified the npm limitation. | Fixed |
 | 2 | `specs/task-breakdown.md` mutation results | The previous 92.63% summary omitted mutant categories. | **Fixed:** recorded the exact target and full 4.16.0 breakdown (88 killed, 2 equivalent survivors, 5 no coverage, 7 compile errors), plus a repeat 4.13.0 result. | Fixed |
 | 3 | `specs/task-breakdown.md` verification checklists | Step 3 isolation and final acceptance were not marked complete despite the commit sequence and test evidence. | **Fixed:** reconciled checkboxes with commits `0cf53e0`, `25f9e44`, `821188c`, `8c59318`, `0757be1` and verified runs (38 unit tests, 1 E2E test). | Fixed |
 
-All three findings are fixed in this documentation-polish pass; no application code was changed.
+All three findings are fixed in the documentation-polish pass; the Stryker executable name and PATH prerequisite are clarified here without changing application code.
 
 ## Demo Video
 

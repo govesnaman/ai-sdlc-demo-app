@@ -100,8 +100,9 @@ Add a Playwright end-to-end scenario that exercises a rejected over-limit approv
 - E2E command from the repository root: `cd e2e && npm test`.
 - Unit baseline: `dotnet test backend/InvoiceApp.sln`.
 - C# mutation testing uses the Stryker.NET global tool; the root npm Stryker/Vitest runner does not mutate C# code. Install the pinned tool and run from the unit-test project directory:
-  - `dotnet tool install -g dotnet-stryker --version 4.13.0`
-  - `cd backend/tests/InvoiceApp.Tests && dotnet stryker --project InvoiceApp.Domain.csproj --test-project InvoiceApp.Tests.csproj --mutate '**/ApprovalService.cs' --concurrency 2 --reporter ClearTextTree --reporter Json --output /tmp/stryker-approval-service`
+  - `dotnet tool install --global dotnet-stryker --version 4.13.0`
+  - The executable is `dotnet-stryker`, not `dotnet stryker`. If it is not found, add `$HOME/.dotnet/tools` (macOS/Linux) or `%USERPROFILE%\.dotnet\tools` (Windows) to `PATH`, then open a new shell.
+  - `cd backend/tests/InvoiceApp.Tests && dotnet-stryker --project InvoiceApp.Domain.csproj --test-project InvoiceApp.Tests.csproj --mutate '**/ApprovalService.cs' --concurrency 2 --reporter ClearTextTree --reporter Json --output /tmp/stryker-approval-service`
 - The recorded Step 3 run with Stryker.NET 4.16.0 targeted `ApprovalService.cs` and scored 92.63% (88 killed, 2 equivalent survivors, 5 no coverage, and 7 compile errors). A repeat run using the pinned 4.13.0 tool scored 92.71% (89 killed, 2 equivalent survivors, 5 no coverage, and 7 compile errors). The equivalent survivors were reviewed: replacing the `"Director"` tier value with an empty string still selects the Director limit because only `"Manager"` selects the lower limit; changing `>` to `>=` in the later high-value branch cannot affect the exact 500,000 boundary because the preceding pending-invoice branch handles amounts through 500,000.
 
 ### E2E and mutation targets
