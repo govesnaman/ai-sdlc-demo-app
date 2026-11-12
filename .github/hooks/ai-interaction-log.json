@@ -1,0 +1,11 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "type": "command",
+        "command": "node scripts/log-ai-interaction.js --agent copilot --step session-stop --prompt \"Copilot session completed; see task-level entry for prompt summary.\" --summary \"Automatic session-end audit marker. Use the structured-logging skill for the task-specific record.\" --files \"\"",
+        "timeout": 10
+      }
+    ]
+  }
+}

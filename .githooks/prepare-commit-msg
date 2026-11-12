@@ -1,0 +1,18 @@
+#!/bin/sh
+set -eu
+
+repository_root=$(git rev-parse --show-toplevel)
+cd "$repository_root"
+
+commit_message_file=$1
+test -f "$commit_message_file"
+staged_files=$(git diff --cached --name-only)
+
+node scripts/log-ai-interaction.js \
+  --agent "git-hook" \
+  --step "prepare-commit-msg" \
+  --prompt "Automatic Git commit audit record." \
+  --summary "A commit was prepared; refer to Git commit metadata for its message." \
+  --files "$staged_files"
+
+git add -- ai-interaction-log.md
